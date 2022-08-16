@@ -1,7 +1,7 @@
 #--------------------------------------------------------------------------------------------------#
 # SlackPost-RackCheck.py: Rack Check Data Collection and Send a message to Slack                   #
 #--------------------------------------------------------------------------------------------------#
-#  AUTHOR: Yuhui.Seo        2022/08/08                                                             #
+#  AUTHOR: Yuhui.Seo        2022/08/16                                                             #
 #--< CHANGE HISTORY >------------------------------------------------------------------------------#
 #          Yuhui.Seo        2022/XX/XX #001(Change XXX)                                            #
 #--------------------------------------------------------------------------------------------------#
@@ -10,17 +10,20 @@
 # Main process                                                                                     #
 # Python version 3.10.0                                                                            #
 #--------------------------------------------------------------------------------------------------#
-import pymssql                     # pip install pymssql
-import pandas as pd                # pip install pandas
-import requests                    # pip install requests
-from openpyxl import load_workbook # pip install openpyxl
-from openpyxl.styles import Border, Side, Protection
-from openpyxl.styles.colors import Color
+from email import header
+from openpyxl import load_workbook # requires: pip install openpyxl
+from slack_sdk import WebClient    # requires: pip install slack_sdk
+import pymssql                     # requires: pip install pymssql
+import pandas as pd                # requires: pip install pandas
 from datetime import datetime
+from slack_sdk.errors import SlackApiError
+from openpyxl.styles import Border, Side, Protection
 import os
+import socket
 import warnings
-
 warnings.filterwarnings('ignore')
+
+# TODO: 1. 엑셀 인쇄 페이지 자동설정
 
 # Connect Python to SQL Server
 def select_sqldata():
@@ -40,6 +43,12 @@ def select_sqldata():
     df = pd.read_sql(sql = sql, con = conn)
     conn.close()
     return df
+
+
+def system_info():
+    hostname = socket.gethostname() # PC명
+    # ip = socket.gethostbyname(hostname) #IP주소
+    return hostname
 
 
 def get_current_datetime(format):
@@ -170,43 +179,136 @@ def AutoFitColumnSize(worksheet, columns = None, margin = 2):
     return worksheet
 
 
-def set_slack_payload(data_row):
-    blocks = ''
-    if data_row == '': # TODO: 랙정상화 대상 없을 때, 테스트 필요!
-        text = 'text = :memo: 랙정상화 대상은 없습니다.'
-    else:
-        text = ':memo: SlackPost-RackCheck'
-        blocks = [
+# RackCheck Bot
+#
+# Rack Check List
+#
+# PCNAME, YYYY-MM-DD HH:mm:ss
+# 랙정상화 대상 : XX건
+#
+# ---------------------------------------------------------
+#
+# 연번  랙ID  S   Z   X   Y   상태
+# 랙정상리스트 엑셀파일
+# ---------------------------------------------------------
+class SlackAPI:
+    """
+    슬랙 API 핸들러
+    """
+    def __init__(self, token):
+        # 슬랙 클라이언트 인스턴스 생성
+        self.client = WebClient(token)
+
+    def post_Message(self, channel_id, msg, index):
+        hostname = system_info()
+        try:
+            response= self.client.chat_postMessage(
+            channel= channel_id,
+            blocks=[
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Rack Check List"
+                    }
+                },
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "plain_text",
+                            "text": hostname + ", " + get_current_datetime(2)
+                        }
+                    ]
+                },
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": ":memo: 랙정상화 대상은 " + data_row + "건 입니다."
+                        "text": msg
                     }
                 }
             ]
-    
-    return text, blocks
+        )
+        except SlackApiError as e:
+            print(e.response['error'])
+
+    def post_files_upload(self, channel_id, msg):
+        hostname = system_info()
+        try:
+            response_msg = self.client.chat_postMessage(
+                channel= channel_id,
+                blocks=[
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Rack Check List"
+                        }
+                    },
+                    {
+                        "type": "context",
+                        "elements": [
+                            {
+                                "type": "plain_text",
+                                "text": hostname + ", " + get_current_datetime(2)
+                            }
+                        ]
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": msg
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "index  랙ID  S   Z   X   Y   상태 \n" + 
+                                    "1   랙ID  S   Z   X   Y   상태 \n" +
+                                    "2   랙ID  S   Z   X   Y   상태 \n" +
+                                    "3   랙ID  S   Z   X   Y   상태 \n"
+                        }
+                    }
+                ]
+            )
+            response_xlsx= self.client.files_upload(
+                channels= channel_id,
+                file= './Download-SVR354/AW_RACK_CHECK_20220812154027.xlsx',
+                filename= 'AW_RACK_CHECK_20220812154027.xlsx', # 다운로드 시 파일명(확장자까지 설정 필요)
+                filetype= 'xlsx',
+                title= 'AW_RACK_CHECK_20220812154027.xlsx', # Slack 파일 첨부의 파일명
+                initial_comment= 'initial_comment입니다.',
+            )
+        except SlackApiError as e:
+            print(e.response['error'])
+
+def set_slack_token():
+    # Bot OAuth Token:'xoxb-XXXXXXXXXXXXXXXXXX'
+    token= 'xoxb-XXXXXXXXXXXXXXXXXX'
+    return token
 
 
-def send_message_to_slack(data_row):
+def set_slack_channel():
+    channel_id= 'CXXXXXXXXXX'
+    return channel_id
     
-    text, blocks = set_slack_payload(data_row)
     
-    url = 'https://hooks.slack.com/services/TXXXXXXX' # WebHook Url
+def set_result(result):
+    if result == False:
+        msg = '> 현재 랙정상화 대상은 없습니다! :tada:'
+    else:
+        msg = '> 현재 랙정상화 대상은 XX건 입니다.'
+    return msg
 
-    headers = {
-        'Content-Type': 'application/json'
-        }
-    
-    payload = {
-        'text': text,
-        'blocks' : blocks
-        }
-    
-    # requests.post(url, headers = headers, json = payload)
-    res = requests.post(url, headers = headers, json = payload)
-    print(res.status_code)
+
+def set_slack_msg():
+    print(str(df))
+    index = '결과값'
+    return index
+
 
 #--------------------------------------------------------------------------------------------------#
 # Code Entry                                                                                       #
@@ -214,10 +316,12 @@ def send_message_to_slack(data_row):
 
 df = select_sqldata()
 now = datetime.now()
+slack = SlackAPI(set_slack_token())
+channel_id = set_slack_channel()
 
-if df.empty:                     # 1.SELECT Rack Check #TODO : Slack에서 /커맨드로 실행
-    print('DataFrame is empty!') # 2.결과가 없다면 Slack 전송
-    # send_message_to_slack(True)
+
+if df.empty:                                            # 1.SELECT RackCheck # TODO : Slack에서 /커맨드로 실행
+    slack.post_Message(channel_id, set_result(False)) # 2.랙정상화 대상이 없다면 Slack 전송
 else:
-    data_row = save_excel()         # 3.결과가 있다면 csv파일, excel파일 생성
-    send_message_to_slack(data_row) # 4.결과와 Excel파일 Slack 업로드
+    data_row = save_excel()                             # 3.랙정상화 대상이 있다면 csv파일, excel파일 생성
+    slack.post_files_upload(channel_id, set_result(True), set_slack_msg()) # 4.excel파일 Slack 전송
