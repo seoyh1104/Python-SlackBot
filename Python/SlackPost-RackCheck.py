@@ -13,6 +13,8 @@
 #--------------------------------------------------------------------------------------------------#
 import pymssql                             # requires: pip install pymssql
 import pandas as pd                        # requires: pip install pandas
+import dataframe_image as dfi              # requires: pip install dataframe_image
+from tabulate import tabulate              # requires: pip install tabulate[widechars]
 from slack_sdk import WebClient            # requires: pip install slack_sdk
 from slack_sdk.errors import SlackApiError
 from openpyxl import load_workbook         # requires: pip install openpyxl
@@ -40,27 +42,41 @@ class SystemInfo:
                 format = '%Y%m%d%H%M%S'
         current_datetime = now.strftime(format)
         return current_datetime
+    
+    def str_slicing(str):
+        index = str.rfind('/')
+        str = str[index+1:]
+        return str
 
 
 class ReadConfig:
     def __init__(self):
         self.conf_file = 'config.ini'
     
-    def load_config(self, section):
+    def load_config(self):
         if os.path.exists(self.conf_file) == False:
             raise Exception('%s file does not exist. \n' % self.conf_file)
         else: 
             config = configparser.ConfigParser()
             config.read(self.conf_file, encoding = 'utf-8')
             print("Load Config : %s" % self.conf_file)
-            
-            self.db_config = config[section]
-            return self.db_config
-        
-        
+            return config
+
+
+class ReadSql:
+    def read_sql(config):
+        file_name = config.get('FILES', 'sql')
+        f = open(file_name, 'r', encoding='utf-8')
+        query = f.readlines()
+        sql = ''.join(query)
+        f.close()
+        return sql
+
+
 class MssqlController:
-    def __init__(self):
-        self.db_config = ReadConfig.load_config(ReadConfig(), 'DB_CONFIG')
+    def __init__(self, config, sql):
+        self.sql = sql
+        self.db_config = config['DB_CONFIG']
         
     def __connect__(self):
         try:
@@ -74,9 +90,9 @@ class MssqlController:
             print('DB not connected: ', e)
             raise
             
-    def execute(self, sql):
+    def execute(self):
         self.__connect__()
-        self.cur.execute(sql)
+        self.cur.execute(self.sql)
         df = pd.DataFrame(self.fetch())
         self.__disconnect__()
         return df
@@ -87,23 +103,16 @@ class MssqlController:
     def __disconnect__(self):
         self.conn.close()
 
-# FIXME: .sql file로 실행할 수 있도록 수정
-sql = '''
-SELECT * FROM
-WHERE
-ORDER BY
-'''
 
-# TODO: 1. Config화
-# TODO: 2. EXCEL 인쇄페이지 자동설정
+# TODO: 1. 엑셀 인쇄 페이지 자동설정
+# TODO: 2. csv, 엑셀 파일명 로그에 표시하기
 class CreateFile:
-    def __init__(self, now):
-        self.paths_config = ReadConfig.load_config(ReadConfig(), 'PATHS_CONFIG')
-        self.excel_config = ReadConfig.load_config(ReadConfig(), 'EXCEL_CONFIG')
-        self.CSV = self.paths_config['CSV']
-        self.XLSX = self.paths_config['XLSX']
-        self.file_directory = self.paths_config['file_directory']
-        self.file_name = self.paths_config['file_name']
+    def __init__(self, now, config):
+        self.files_config = config['FILES']
+        self.CSV = self.files_config['CSV']
+        self.XLSX = self.files_config['XLSX']
+        self.file_directory = self.files_config['file_directory']
+        self.file_name = self.files_config['file_name']
         self.now = now
     
     def exists_dir(self):
@@ -148,9 +157,9 @@ class CreateFile:
     def set_sheetdata(self, ws):
         current_datetime = SystemInfo.get_current_datetime(self.now, 3)
         # 시트명 변경
-        ws.title = self.excel_config['sheet_title'] + '_' + current_datetime
+        ws.title = self.files_config['sheet_title'] + '_' + current_datetime
         # 시트탭 색변경
-        ws.sheet_properties.tabColor = self.excel_config['TAB_COLOR_BLUE']
+        ws.sheet_properties.tabColor = self.files_config['TAB_COLOR_BLUE']
         # ws.sheet_properties.tabColor = TAB_COLOR_PINK
         # 숫자 형식으로 표시
         column = 'P' # P열:재고관리코드
@@ -180,41 +189,44 @@ class CreateFile:
         return ws
 
     def make_color_border(self):
-        color = self.excel_config['BORDER_COLOR']
+        color = self.files_config['BORDER_COLOR']
         border = Border(left = Side(style='thin', color=color),
                         right = Side(style='thin', color=color),
                         top = Side(style='thin', color=color),
                         bottom = Side(style='thin', color=color))
         return border
 
-# RackCheck Bot
+
+# Rack Bot
 #
 # Rack Check List
-#
 # PCNAME, YYYY-MM-DD HH:mm:ss
-# 랙정상화 대상 : XX건
-#
+# 현재 랙정상화 대상은 XX건 입니다.
 # ---------------------------------------------------------
-#
-# 연번  랙ID  S   Z   X   Y   상태
-# 랙정상리스트 엑셀파일
+# 랙ID       s    z   x   y  상태
+# XXXXXXXXX  XX  XX  XX  XX  이중입고
+# XXXXXXXXX  XX  XX  58  XX  재고확인
+# ---------------------------------------------------------
+# Image file
+# Excel file
 # ---------------------------------------------------------
 class SlackAPI:
 
-    def __init__(self, token, now):
+    def __init__(self, token, config, now):
         # 슬랙 클라이언트 인스턴스 생성
         self.client = WebClient(token)
-        slack_config = ReadConfig.load_config(ReadConfig(), 'SLACK_CONFIG')
-        paths_config = ReadConfig.load_config(ReadConfig(), 'PATHS_CONFIG')
+        self.hostname = SystemInfo.system_info()
+        self.datetime = SystemInfo.get_current_datetime(now, 2)
+        files_config = config['FILES']
+        slack_config = config['SLACK']
+        self.XLSX = files_config['XLSX']
         self.channel_id = slack_config['channel_id']
-        self.XLSX = paths_config['XLSX']
-        self.now = now
         
     def post_Message(self, msg):
-        hostname = SystemInfo.system_info()
         try:
             response= self.client.chat_postMessage(
             channel= self.channel_id,
+            text = '랙정상 리스트입니다.', # Slack 전송시 알람 메세지
             blocks=[
                 {
                     "type": "header",
@@ -228,7 +240,7 @@ class SlackAPI:
                     "elements": [
                         {
                             "type": "plain_text",
-                            "text": hostname + ", " + SystemInfo.get_current_datetime(self.now, 2)
+                            "text": self.hostname + ", " + self.datetime
                         }
                     ]
                 },
@@ -244,11 +256,12 @@ class SlackAPI:
         except SlackApiError as e:
             print(e.response['error'])
 
-    def post_files_upload(self, msg, result, file_name):
-        hostname = SystemInfo.system_info()
+    def post_files_upload(self, msg, result, file):
+        file_name = SystemInfo.str_slicing(file)
         try:
             response_msg = self.client.chat_postMessage(
                 channel= self.channel_id,
+                text = '랙정상 리스트입니다.', # Slack 전송시 알람 메세지
                 blocks=[
                     {
                         "type": "header",
@@ -262,7 +275,7 @@ class SlackAPI:
                         "elements": [
                             {
                                 "type": "plain_text",
-                                "text": hostname + ", " + SystemInfo.get_current_datetime(self.now, 2)
+                                "text": self.hostname + ", " + self.datetime
                             }
                         ]
                     },
@@ -272,61 +285,84 @@ class SlackAPI:
                             "type": "mrkdwn",
                             "text": msg
                         }
-                    },
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": result
-                        }
                     }
                 ]
+            #     attachments=[
+            #         {
+            #             "fallback": "⚠️요청이 실패했습니다.", # 요청 실패시 메세지
+            #             "color": "#FF9500",
+            #             "pretext": msg,
+            #             "fields": [
+            #                 {
+            #                     # "title": "랙ID               s    z    x    y   상태",
+            #                     "value": result
+            #                 }
+            #             ],
+            #         }
+            #     ]
+            # )
+            # response_xlsx1= self.client.files_upload(
+            #     channels= self.channel_id,
+            #     file= 'image.png',
+            #     filename= 'image.png',
+            #     filetype= 'png',
+            #     title= 'image.png',
+            #     # initial_comment= 'default:이 이미지를 업로드 했습니다.'
             )
-            response_xlsx= self.client.files_upload(
+            response_xlsx3= self.client.files_upload(
                 channels= self.channel_id,
-                file= file_name,
-                filename= 'AW_RACK_CHECK_다운로드시파일명.xlsx', # 다운로드시 파일명(확장자까지 설정 필요)
+                file= file,
+                filename= file_name, # 다운로드했을때의 파일명(확장자까지 설정 필요)
                 filetype= self.XLSX,
-                title= 'AW_RACK_CHECK_첨부파일의파일명.xlsx', # 첨부파일의 파일명
-                initial_comment= 'initial_comment입니다.'
+                title= file_name # 첨부파일의 파일명
+                # initial_comment= 'default:이 파일을 업로드 했습니다.'
             )
         except SlackApiError as e:
             print(e.response['error'])
 
 
-def set_msg(result, df):
-    if result == False:
-        msg = '현재 랙정상화 대상은 없습니다! :tada:'
-    else:
-        df_cnt = len(df)
-        msg = '> 현재 랙정상화 대상은 ' + str(df_cnt) + '건 입니다.'
-    return msg
-
-def set_result(df):
-    index = df[['랙ID', 's', 'z', 'x', 'y', '상태']]
-    return index
-
-def process1():
-    df = MssqlController.execute(MssqlController(), sql)
-    return df
+class SlackPayload:
+    def set_msg(df):
+        if df.empty:
+            msg = '현재 랙정상화 대상은 없습니다! :tada:'
+        else:
+            df_cnt = len(df)
+            msg = '현재 랙정상화 대상은 ' + str(df_cnt) + '건 입니다.'
+        return msg
     
+    def set_result(df):
+        df = df[['랙ID', 's', 'z', 'x', 'y', '상태']]
+        df.index = df.index+1
+        data = tabulate(df, tablefmt="plain", showindex=False) # headers='keys'
+        # Create image file
+        dfi.export(df, 'image.png', max_cols = -1, max_rows = -1)
+        return data
+
+
+def process1(config, sql):
+    df = MssqlController.execute(MssqlController(config, sql))
+    return df
+
 #--------------------------------------------------------------------------------------------------#
 # Code Entry                                                                                       #
 #--------------------------------------------------------------------------------------------------#
 def main():
-    slack_config = ReadConfig.load_config(ReadConfig(), 'SLACK_CONFIG')
-    SLACK_TOKEN = slack_config['SLACK_TOKEN']
+    config = ReadConfig.load_config(ReadConfig())
+    sql = ReadSql.read_sql(config)
+    SLACK_TOKEN = config.get('SLACK', 'SLACK_TOKEN') # config['SLACK']['SLACK_TOKEN'] 결과동일
     now = datetime.now()
-    slack = SlackAPI(SLACK_TOKEN, now)
-    df = process1()                        # 1.SELECT RackCheck # TODO : Slack에서 /커맨드로 실행
+    slack = SlackAPI(SLACK_TOKEN, config, now)
     
-    if df.empty:                                           
-        slack.post_Message(set_msg(False)) # 2.랙정상화 대상이 없다면 Slack 전송
+    # 1.SELECT RackCheck # TODO : Slack에서 /커맨드로 실행
+    df = process1(config, sql)
+    if df.empty:
+        # 2.랙정상화 대상이 없다면 Slack 전송
+        slack.post_Message(SlackPayload.set_msg(df)) 
     else:
-        create_file = CreateFile(now)
-        file_name = CreateFile.save_excel(create_file, df)
-        # CreateFile(df, now)              # 3.랙정상화 대상이 있다면 csv파일, excel파일 생성
-        slack.post_files_upload(set_msg(True, df), set_result(df), file_name) # 4. Slack 전송 (excel파일 및 요약데이터)
+        # 3.랙정상화 대상이 있다면 csv파일, excel파일 생성
+        file = CreateFile.save_excel(CreateFile(now, config), df)
+        # 4. Slack 전송 (Excel File)
+        slack.post_files_upload(SlackPayload.set_msg(df), SlackPayload.set_result(df), file)
     
 if __name__ == "__main__":
     main()
