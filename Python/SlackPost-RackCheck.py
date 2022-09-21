@@ -74,8 +74,8 @@ class ReadSql:
 
 
 class MssqlController:
-    def __init__(self, config, sql):
-        self.sql = sql
+    def __init__(self, config):
+        self.sql = ReadSql.read_sql(config)
         self.db_config = config['DB_CONFIG']
         
     def __connect__(self):
@@ -105,7 +105,6 @@ class MssqlController:
 
 
 # TODO: 1. 엑셀 인쇄 페이지 자동설정
-# TODO: 2. csv, 엑셀 파일명 로그에 표시하기
 class CreateFile:
     def __init__(self, now, config):
         self.files_config = config['FILES']
@@ -129,7 +128,7 @@ class CreateFile:
     def save_csv(self, df):
         csv_file = self.save_filepath() + self.CSV
         df.to_csv(csv_file, header = True, index = False, encoding = 'utf-8')
-        print('Csv file saved successfully')
+        print('Csv file saved successfully : ' + csv_file)
         return csv_file
 
     def csv_to_excel(self, df):
@@ -138,7 +137,7 @@ class CreateFile:
         save_xlsx = pd.ExcelWriter(xlsx_file)
         r_csv.to_excel(save_xlsx, index = False) # xlsx 파일로 변환
         save_xlsx.save() #xlsx 파일로 저장
-        print('Excel file saved successfully')
+        print('Excel file saved successfully : ' + xlsx_file)
         return save_xlsx
 
     def save_excel(self, df):
@@ -339,8 +338,8 @@ class SlackPayload:
         return data
 
 
-def process1(config, sql):
-    df = MssqlController.execute(MssqlController(config, sql))
+def process1(config):
+    
     return df
 
 #--------------------------------------------------------------------------------------------------#
@@ -348,20 +347,19 @@ def process1(config, sql):
 #--------------------------------------------------------------------------------------------------#
 def main():
     config = ReadConfig.load_config(ReadConfig())
-    sql = ReadSql.read_sql(config)
     SLACK_TOKEN = config.get('SLACK', 'SLACK_TOKEN') # config['SLACK']['SLACK_TOKEN'] 결과동일
     now = datetime.now()
     slack = SlackAPI(SLACK_TOKEN, config, now)
     
-    # 1.SELECT RackCheck # TODO : Slack에서 /커맨드로 실행
-    df = process1(config, sql)
+    # 1.랙정상화 대상 조회 # TODO : Slack에서 /커맨드로 실행
+    df = MssqlController.execute(MssqlController(config))
     if df.empty:
         # 2.랙정상화 대상이 없다면 Slack 전송
         slack.post_Message(SlackPayload.set_msg(df)) 
     else:
-        # 3.랙정상화 대상이 있다면 csv파일, excel파일 생성
+        # 3.랙정상화 대상이 있다면 csv, excel file 생성
         file = CreateFile.save_excel(CreateFile(now, config), df)
-        # 4. Slack 전송 (Excel File)
+        # 4. Slack 전송, Excel file 전송
         slack.post_files_upload(SlackPayload.set_msg(df), SlackPayload.set_result(df), file)
     
 if __name__ == "__main__":
