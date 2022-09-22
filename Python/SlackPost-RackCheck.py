@@ -42,7 +42,9 @@ class SystemInfo:
                 format = '%Y%m%d%H%M%S'
         current_datetime = now.strftime(format)
         return current_datetime
-    
+
+
+class CommonFunc:
     def str_slicing(str):
         index = str.rfind('/')
         str = str[index+1:]
@@ -256,7 +258,7 @@ class SlackAPI:
             print(e.response['error'])
 
     def post_files_upload(self, msg, result, file):
-        file_name = SystemInfo.str_slicing(file)
+        file_name = CommonFunc.str_slicing(file)
         try:
             response_msg = self.client.chat_postMessage(
                 channel= self.channel_id,
