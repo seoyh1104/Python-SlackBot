@@ -67,8 +67,8 @@ class ReadConfig:
 
 class ReadSql:
     def read_sql(config):
-        file_name = config.get('FILES', 'sql')
-        f = open(file_name, 'r', encoding='utf-8')
+        FILE_NAME = config.get('FILES', 'sql')
+        f = open(FILE_NAME, 'r', encoding='utf-8')
         query = f.readlines()
         sql = ''.join(query)
         f.close()
@@ -112,8 +112,8 @@ class CreateFile:
         self.files_config = config['FILES']
         self.CSV = self.files_config['CSV']
         self.XLSX = self.files_config['XLSX']
-        self.file_directory = self.files_config['file_directory']
-        self.file_name = self.files_config['file_name']
+        self.FILE_DIRECTORY = self.files_config['file_directory']
+        self.FILE_NAME = self.files_config['file_name']
         self.now = now
     
     def exists_dir(self):
@@ -345,8 +345,8 @@ class SlackPayload:
 #--------------------------------------------------------------------------------------------------#
 def main():
     config = ReadConfig.load_config(ReadConfig())
-    SLACK_TOKEN = config.get('SLACK', 'SLACK_TOKEN') # config['SLACK']['SLACK_TOKEN'] 결과동일
     now = datetime.now()
+    SLACK_TOKEN = config.get('SLACK', 'SLACK_TOKEN') # config['SLACK']['SLACK_TOKEN'] 결과동일
     slack = SlackAPI(SLACK_TOKEN, config, now)
     
     # 1.랙정상화 대상 조회 # TODO : Slack에서 /커맨드로 실행
