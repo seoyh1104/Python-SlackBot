@@ -111,9 +111,9 @@ class CreateFile:
     def __init__(self, now, config):
         self.files_config = config['FILES']
         self.CSV = self.files_config['CSV']
-        self.XLSX = self.files_config['XLSX']
-        self.FILE_DIRECTORY = self.files_config['file_directory']
-        self.FILE_NAME = self.files_config['file_name']
+        self.xlsx = self.files_config['XLSX']
+        self.file_directory = self.files_config['file_directory']
+        self.file_name = self.files_config['file_name']
         self.now = now
     
     def exists_dir(self):
@@ -135,7 +135,7 @@ class CreateFile:
 
     def csv_to_excel(self, df):
         r_csv = pd.read_csv(self.save_csv(df))
-        xlsx_file = self.save_filepath() + self.XLSX
+        xlsx_file = self.save_filepath() + self.xlsx
         save_xlsx = pd.ExcelWriter(xlsx_file)
         r_csv.to_excel(save_xlsx, index = False) # xlsx 파일로 변환
         save_xlsx.save() #xlsx 파일로 저장
@@ -160,7 +160,7 @@ class CreateFile:
         # 시트명 변경
         ws.title = self.files_config['sheet_title'] + '_' + current_datetime
         # 시트탭 색변경
-        ws.sheet_properties.tabColor = self.files_config['TAB_COLOR_BLUE']
+        ws.sheet_properties.tabColor = self.files_config['tab_color_blue']
         # ws.sheet_properties.tabColor = TAB_COLOR_PINK
         # 숫자 형식으로 표시
         column = 'P' # P열:재고관리코드
@@ -173,13 +173,21 @@ class CreateFile:
     def set_column_size(self, ws):
         ws.column_dimensions['A'].width = 4  # ✔
         ws.column_dimensions['B'].width = 10 # 랙ID
+        ws.column_dimensions['C'].width = 3  # s
+        ws.column_dimensions['D'].width = 3  # z
+        ws.column_dimensions['E'].width = 3  # x
+        ws.column_dimensions['F'].width = 3  # y
         ws.column_dimensions['G'].width = 9  # 상태
-        ws.column_dimensions['H'].width = 9  # 입고자명
+        ws.column_dimensions['H'].width = 12 # 입고자명
+        ws.column_dimensions['I'].width = 17 # 마지막입고일
         ws.column_dimensions['J'].width = 11 # 마지막작업
-        ws.column_dimensions['K'].width = 11 # 마지막작업일
-        ws.column_dimensions['L'].width = 14 # 마지막작업자
-        ws.column_dimensions['O'].width = ws.column_dimensions['O'].width + 5 # 상품명
+        ws.column_dimensions['K'].width = 17 # 마지막작업일
+        ws.column_dimensions['L'].width = 12 # 마지막작업자
+        ws.column_dimensions['O'].width = 34 # 상품명
+        ws.column_dimensions['P'].width = 14 # 재고관리코드
+        ws.column_dimensions['R'].width = 5  # 수량
         ws.column_dimensions['S'].width = 9  # 상태코드
+
         return ws
 
     def set_color_border(self, ws):
@@ -190,7 +198,7 @@ class CreateFile:
         return ws
 
     def make_color_border(self):
-        color = self.files_config['BORDER_COLOR']
+        color = self.files_config['border_color']
         border = Border(left = Side(style='thin', color=color),
                         right = Side(style='thin', color=color),
                         top = Side(style='thin', color=color),
@@ -258,7 +266,7 @@ class SlackAPI:
             print(e.response['error'])
 
     def post_files_upload(self, msg, result, file):
-        file_name = CommonFunc.str_slicing(file)
+        self.file_name = CommonFunc.str_slicing(file)
         try:
             response_msg = self.client.chat_postMessage(
                 channel= self.channel_id,
@@ -313,9 +321,9 @@ class SlackAPI:
             response_xlsx3= self.client.files_upload(
                 channels= self.channel_id,
                 file= file,
-                filename= file_name, # 다운로드했을때의 파일명(확장자까지 설정 필요)
+                filename= self.file_name, # 다운로드했을때의 파일명(확장자까지 설정 필요)
                 filetype= self.XLSX,
-                title= file_name # 첨부파일의 파일명
+                title= self.file_name # 첨부파일의 파일명
                 # initial_comment= 'default:이 파일을 업로드 했습니다.'
             )
         except SlackApiError as e:
@@ -343,7 +351,7 @@ class SlackPayload:
 #--------------------------------------------------------------------------------------------------#
 # Code Entry                                                                                       #
 #--------------------------------------------------------------------------------------------------#
-def main():
+def rack_check():
     config = ReadConfig.load_config(ReadConfig())
     now = datetime.now()
     SLACK_TOKEN = config.get('SLACK', 'SLACK_TOKEN') # config['SLACK']['SLACK_TOKEN'] 결과동일
@@ -359,6 +367,6 @@ def main():
         file = CreateFile.save_excel(CreateFile(now, config), df)
         # 4. Slack 전송, Excel file 전송
         slack.post_files_upload(SlackPayload.set_msg(df), SlackPayload.set_result(df), file)
-    
+
 if __name__ == "__main__":
-    main()
+    rack_check()
