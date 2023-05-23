@@ -188,10 +188,10 @@ class CreateFile(CommonFunc):
         r_csv = pd.read_csv(self.save_csv(data_frame))
         xlsx_file = self.save_filepath() + '.xlsx'
         save_xlsx = pd.ExcelWriter(xlsx_file)
-        r_csv.to_excel(save_xlsx, index=False)  # Convert to xlsx file
-        save_xlsx.save() # Save as xlsx file
+        r_csv.to_excel(save_xlsx, index=False) # Convert to xlsx file
+        save_xlsx.close() # Close the ExcelWriter 
         print('Excel file saved successfully : ' + xlsx_file)
-        return save_xlsx
+        return xlsx_file
 
     def save_excel(self, data_frame):
         work_book = load_workbook(self.csv_to_excel(data_frame))
@@ -238,7 +238,6 @@ class CreateFile(CommonFunc):
         work_sheet.column_dimensions['P'].width = 14 # 재고관리코드
         work_sheet.column_dimensions['R'].width = 5  # 수량
         work_sheet.column_dimensions['S'].width = 9  # 상태코드
-
         return work_sheet
 
     def set_color_border(self, work_sheet):
