@@ -350,7 +350,7 @@ class SlackAPI(CommonFunc):
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": self.slack_msg
+                            "text": ">" + self.slack_msg
                             + "```" + df_to_markdown + "```"
                         }
                     }
