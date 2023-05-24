@@ -222,22 +222,22 @@ class CreateFile(CommonFunc):
         return work_sheet
 
     def set_column_size(self, work_sheet):
-        work_sheet.column_dimensions['A'].width = 4  # ✔
-        work_sheet.column_dimensions['B'].width = 10 # 랙ID
-        work_sheet.column_dimensions['C'].width = 3  # s
-        work_sheet.column_dimensions['D'].width = 3  # z
-        work_sheet.column_dimensions['E'].width = 3  # x
-        work_sheet.column_dimensions['F'].width = 3  # y
-        work_sheet.column_dimensions['G'].width = 9  # 상태
-        work_sheet.column_dimensions['H'].width = 12 # 입고자명
-        work_sheet.column_dimensions['I'].width = 18 # 마지막입고일
-        work_sheet.column_dimensions['J'].width = 11 # 마지막작업
-        work_sheet.column_dimensions['K'].width = 18 # 마지막작업일
-        work_sheet.column_dimensions['L'].width = 12 # 마지막작업자
-        work_sheet.column_dimensions['O'].width = 34 # 상품명
-        work_sheet.column_dimensions['P'].width = 14 # 재고관리코드
-        work_sheet.column_dimensions['R'].width = 5  # 수량
-        work_sheet.column_dimensions['S'].width = 9  # 상태코드
+        work_sheet.column_dimensions['A'].width = 4    # ✔
+        work_sheet.column_dimensions['B'].width = 10   # 랙ID
+        work_sheet.column_dimensions['C'].width = 3    # s
+        work_sheet.column_dimensions['D'].width = 3    # z
+        work_sheet.column_dimensions['E'].width = 3    # x
+        work_sheet.column_dimensions['F'].width = 3    # y
+        work_sheet.column_dimensions['G'].width = 9    # 상태
+        work_sheet.column_dimensions['H'].width = 12   # 입고자명
+        work_sheet.column_dimensions['I'].width = 17.4 # 마지막입고일
+        work_sheet.column_dimensions['J'].width = 11   # 마지막작업
+        work_sheet.column_dimensions['K'].width = 17.4 # 마지막작업일
+        work_sheet.column_dimensions['L'].width = 13.5 # 마지막작업자
+        work_sheet.column_dimensions['O'].width = 34   # 상품명
+        work_sheet.column_dimensions['P'].width = 14   # 재고관리코드
+        work_sheet.column_dimensions['R'].width = 5    # 수량
+        work_sheet.column_dimensions['S'].width = 9    # 상태코드
         return work_sheet
 
     def set_color_border(self, work_sheet):
