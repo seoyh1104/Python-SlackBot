@@ -285,8 +285,8 @@ class SlackAPI(CommonFunc):
             self.slack_msg = '현재 랙정상화 대상은 ' + str(data_frame_cnt) + '건 입니다.'
 
             data_frame = data_frame[['랙ID', 's', 'z', 'x', 'y', '상태']]
-            # data_frame.index = data_frame.index+1
-            data = tabulate(data_frame, tablefmt='plain', showindex=False, headers='keys')
+            data_frame.index = data_frame.index+1
+            data = tabulate(data_frame, tablefmt='plain', showindex=True, headers='keys')
         return data
 
     def post_message(self):
