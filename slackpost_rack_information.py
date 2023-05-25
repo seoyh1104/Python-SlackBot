@@ -189,7 +189,7 @@ class CreateFile(CommonFunc):
         xlsx_file = self.save_filepath() + '.xlsx'
         save_xlsx = pd.ExcelWriter(xlsx_file)
         r_csv.to_excel(save_xlsx, index=False) # Convert to xlsx file
-        save_xlsx.close() # Close the ExcelWriter 
+        save_xlsx.close() # Close the ExcelWriter
         print('Excel file saved successfully : ' + xlsx_file)
         return xlsx_file
 
@@ -328,7 +328,7 @@ class SlackAPI(CommonFunc):
         try:
             self.client.chat_postMessage(
                 channel=self.channel_id,
-                text='랙정상 리스트입니다.', # Notification message
+                text=self.slack_msg, # Notification message
                 blocks=[
                     {
                         "type": "header",
@@ -351,7 +351,7 @@ class SlackAPI(CommonFunc):
                         "text": {
                             "type": "mrkdwn",
                             "text": ">" + self.slack_msg
-                            + "```" + df_to_markdown + "```"
+                                    + "```" + df_to_markdown + "```"
                         }
                     }
                 #     {
@@ -376,10 +376,9 @@ class SlackAPI(CommonFunc):
             self.client.files_upload(
                 channels=self.channel_id,
                 file=file,
-                filename=self.file_name, # File name when downloaded (requires extension)
-                filetype='.xlsx',
-                title=self.file_name     # name of attached file
-                # initial_comment= 'default:이 파일을 업로드 했습니다.'
+                filename=self.file_name
+                # filetype='.xlsx',
+                # initial_comment= "이 파일을 업로드 했습니다." # default
             )
         except SlackApiError as error:
             print(error.response['error'])
